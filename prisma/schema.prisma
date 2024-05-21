@@ -1,0 +1,247 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  username String     @id @db.VarChar(50)
+  email    String     @unique @db.VarChar(60)
+  password String
+  name     String     @db.VarChar(100)
+  // token    String?   @db.VarChar(100)
+  sessions Session[]  @relation(name: "OnlineUsers")
+  Roles    UserRole[]
+  Contact  Contact[]
+
+  @@map("users")
+}
+
+model UserRole {
+  User     User   @relation(fields: [username], references: [username], onDelete: Cascade)
+  username String
+  role     Role   @default(USER)
+
+  @@unique([username, role])
+  @@map("user_roles")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  valid     Boolean  @default(true)
+  userAgent String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(name: "OnlineUsers", fields: [username], references: [username], onDelete: Cascade)
+  username  String
+
+  @@map("sessions")
+}
+
+model Contact {
+  id        Int       @id @default(autoincrement())
+  firstName String    @db.VarChar(50)
+  lastName  String?   @db.VarChar(50)
+  email     String?   @db.VarChar(50)
+  phone     String?   @db.VarChar(20)
+  user      User      @relation(fields: [username], references: [username])
+  username  String    @db.VarChar(50)
+  Addresses Address[]
+
+  @@map("contacts")
+}
+
+model Address {
+  id         Int     @id @default(autoincrement())
+  street     String  @db.VarChar(200)
+  city       String? @db.VarChar(50)
+  province   String? @db.VarChar(50)
+  country    String  @db.VarChar(50)
+  postalCode String  @db.VarChar(10)
+  contact    Contact @relation(fields: [contactId], references: [id])
+  contactId  Int
+
+  @@map("addresses")
+}
+
+model Customer {
+  id       String     @id @default(cuid())
+  name     String     @db.VarChar(100)
+  address  String?    @db.VarChar(100)
+  phone    String?    @db.VarChar(20)
+  email    String?    @db.VarChar(50)
+  npwp     String?    @db.VarChar(50)
+  Contract Contract[]
+
+  @@map("customers")
+}
+
+model ContractType {
+  id                      String         @id @default(cuid())
+  name                    String         @db.VarChar(100)
+  Revenue                 ChartOfAccount @relation("Revenue", fields: [revenueId], references: [id])
+  revenueId               String         @db.VarChar(10)
+  CollectionReceivables   ChartOfAccount @relation("CollectionReceivables", fields: [collectionReceivablesId], references: [id])
+  collectionReceivablesId String         @db.VarChar(10)
+  AssignmentReceivables   ChartOfAccount @relation("AssignmentReceivables", fields: [assignmentReceivablesId], references: [id])
+  assignmentReceivablesId String         @db.VarChar(10)
+  Contract                Contract[]
+
+  @@unique(name)
+  @@map("contract_types")
+}
+
+model Contract {
+  id                 String             @id @default(cuid())
+  contractNo         String
+  description        String
+  contractValue      Decimal            @default(0) @db.Decimal(14, 2)
+  includePPN         Boolean            @default(true)
+  percentPPN         Int                @default(11) @db.TinyInt
+  contractDate       DateTime           @db.Date
+  validityPeriod     DateTime           @db.Date
+  contractStatus     VerificationStatus @default(Open)
+  verificationLevel  VerificationLevel  @default(ADMIN)
+  Customer           Customer           @relation(fields: [customerId], references: [id])
+  customerId         String
+  ContractType       ContractType       @relation(fields: [contractTypeId], references: [id])
+  contractTypeId     String
+  accumulatedPayment Decimal            @default(0) @db.Decimal(14, 2)
+  rejectedRemark     String?
+  bastAmount         Decimal            @default(0) @db.Decimal(14, 2)
+  billedAmount       Decimal            @default(0) @db.Decimal(14, 2)
+  paidAmount         Decimal            @default(0) @db.Decimal(14, 2)
+  balanceAmount      Decimal            @default(0) @db.Decimal(14, 2)
+  oldContractValue   Decimal            @default(0) @db.Decimal(14, 2)
+  oldValidityPeriod  DateTime?          @db.Date
+  ContractApproval   ContractApproval[]
+  // Payments           ContractPayment[]
+  // Bast               Bast[]
+  Amendment          Amendment[]
+  // Finance            Finance[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([contractStatus])
+  @@index([verificationLevel])
+  @@index([contractStatus, verificationLevel])
+  @@index([id, customerId])
+  @@map("contracts")
+}
+
+model ContractApproval {
+  id             String             @id @default(cuid())
+  approvalBy     VerificationLevel  @default(ADMIN)
+  approvalStatus VerificationStatus @default(Submitted)
+  remark         String
+  contractId     String
+  Contract       Contract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([id, contractId])
+  @@map("contract_approvals")
+}
+
+model Amendment {
+  id                     String   @id @default(cuid())
+  amendmentNo            String   @db.VarChar(30)
+  amendmentDate          DateTime @db.Date
+  remark                 String
+  amendmentFileName      String   @db.VarChar(100)
+  contractValue          Decimal  @default(0) @db.Decimal(14, 2)
+  contractValidityPeriod DateTime @db.Date
+  amendmentValue         Decimal  @default(0) @db.Decimal(14, 2)
+  validityPeriod         DateTime @db.Date
+  isActive               Boolean  @default(true)
+  contractId             String
+  Contract               Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([contractId, isActive])
+  @@map("contract_amendments")
+}
+
+model ChartOfAccount {
+  id                    String           @id() @db.VarChar(10)
+  accountNo             String           @db.VarChar(6)
+  description           String           @db.VarChar(60)
+  levelAcc              Int              @default(0) @db.TinyInt
+  accountLevel          AccountLevel     @default(GROUP)
+  typeAcc               GroupAccount     @default(GROUP)
+  isDebit               Boolean          @default(true)
+  isBalanceSheetAccount Boolean          @default(true)
+  code                  String?          @db.VarChar(3)
+  parentId              String?          @db.VarChar(10)
+  showInReport          Boolean          @default(false)
+  cashAccount           Boolean          @default(false)
+  parent                ChartOfAccount?  @relation("ParentChild", fields: [parentId], references: [id])
+  children              ChartOfAccount[] @relation("ParentChild")
+  // Parameter             Parameter?
+  // JournalDetail         JournalDetail[]
+  // Ledger                Ledger[]
+  // FixedAsset            FixedAsset[]     @relation("AssetAccount")
+  // FixedAssetExpense     FixedAsset[]     @relation("ExpenseAccount")
+  // FixedAssetAccumulated FixedAsset[]     @relation("AccumulatedAccount")
+  // Finance               Finance[]
+  // FinanceLedger         FinanceLedger[]
+  // FinanceDetail         FinanceDetail[]
+  Revenue               ContractType[]   @relation("Revenue")
+  CollectionReceivables ContractType[]   @relation("CollectionReceivables")
+  AssignmentReceivables ContractType[]   @relation("AssignmentReceivables")
+  // Product               Product[]
+
+  // @@unique([parent, accountNo(sort: Asc)], name: "fullId")
+  @@index([typeAcc])
+  @@index([parentId])
+  @@map("chart_of_accounts")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUPERVISOR
+  MANAGER
+  ROOT
+}
+
+enum AccountLevel {
+  ROOT
+  GROUP
+  SUB_GROUP
+  CLUSTER
+  SUB_CLUSTER
+  UNIT_CLUSTER
+  DETAIL
+}
+
+enum GroupAccount {
+  GROUP
+  DETAIL
+}
+
+enum VerificationStatus {
+  Open
+  Submitted
+  Released
+  Approved
+  Rejected
+  Posted
+  Closed
+}
+
+enum VerificationLevel {
+  ADMIN
+  SUPERVISOR
+  MANAGER
+}
